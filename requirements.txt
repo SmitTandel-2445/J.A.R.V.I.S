@@ -1,0 +1,15 @@
+customtkinter
+python-dotenv
+pillow
+psutil
+speech_recognition
+pyttsx3
+PyAudio
+comtypes
+google-genai
+pycaw
+pyautogui
+pyperclip
+screen_brightness_control
+pygetwindow
+pywin32
