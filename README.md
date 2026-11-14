@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <b>A voice-controlled Iron Man Mark VII AI Desktop Assistant built with Python, CustomTkinter, and Google Gemini AI.</b>
+  <b>A voice-controlled AI Desktop Assistant built with Python, CustomTkinter, and Google Gemini AI.</b>
 </p>
 
 ---
@@ -111,5 +111,5 @@ J.A.R.V.I.S/
 ---
 
 ## 🛡️ License & Acknowledgments
-Created by **Smit Tandel**. Inspired by Marvel's Iron Man and Stark Industries.
+Created by **Smit Tandel**.
 
