@@ -35,16 +35,19 @@ class PendingAction:
 class ConfirmationManager:
     """Thread-safe manager for holding and verifying high-risk pending actions."""
 
-    # Explicit positive confirmation phrases
+    # Explicit positive confirmation phrases (English, Hindi, and Hinglish)
     POSITIVE_CONFIRMATIONS = {
         "yes", "confirm", "proceed", "affirmative", "yes please",
         "do it", "sure", "yeah", "yep", "go ahead", "approved",
+        "haan", "ha", "haanji", "theek hai", "kar do", "karo",
+        "bilkul", "sahi hai", "pakka",
     }
 
-    # Explicit negative cancellation phrases
+    # Explicit negative cancellation phrases (English, Hindi, and Hinglish)
     NEGATIVE_CONFIRMATIONS = {
         "no", "cancel", "abort", "stop", "nevermind", "dont",
         "don't", "negative", "halt", "deny",
+        "nahi", "nahin", "mat karo", "rehne do", "cancel karo", "roko",
     }
 
     def __init__(self, timeout_seconds: float = 30.0):
@@ -129,6 +132,8 @@ class ConfirmationManager:
                 or any(w in self.POSITIVE_CONFIRMATIONS for w in words)
                 or "yes jarvis" in clean
                 or "confirm jarvis" in clean
+                or "haan jarvis" in clean
+                or "ha jarvis" in clean
             )
 
             # Check for negative cancellation
@@ -137,6 +142,8 @@ class ConfirmationManager:
                 or any(w in self.NEGATIVE_CONFIRMATIONS for w in words)
                 or "cancel jarvis" in clean
                 or "no jarvis" in clean
+                or "nahi jarvis" in clean
+                or "nahin jarvis" in clean
             )
 
             if is_positive and not is_negative:

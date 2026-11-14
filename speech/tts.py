@@ -16,6 +16,37 @@ import comtypes.client
 import config
 from utils.logger import logger
 
+# Devanagari Hindi to Romanized English phonetic map for smooth SAPI pronunciation
+DEVANAGARI_MAP = {
+    'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo',
+    'ऋ': 'ri', 'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'अं': 'am', 'अः': 'ah',
+    'क': 'k', 'ख': 'kh', 'ग': 'g', 'घ': 'gh', 'ङ': 'ng',
+    'च': 'ch', 'छ': 'chh', 'ज': 'j', 'झ': 'jh', 'ञ': 'ny',
+    'ट': 't', 'ठ': 'th', 'ड': 'd', 'ढ': 'dh', 'ण': 'n',
+    'त': 't', 'थ': 'th', 'द': 'd', 'ध': 'dh', 'न': 'n',
+    'प': 'p', 'फ': 'ph', 'ब': 'b', 'भ': 'bh', 'म': 'm',
+    'य': 'y', 'र': 'r', 'ल': 'l', 'व': 'v', 'श': 'sh', 'ष': 'sh', 'स': 's', 'ह': 'h',
+    'ा': 'aa', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo', 'ृ': 'ri',
+    'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', '्': '', 'ं': 'n', 'ः': 'h',
+    '।': '.', '॥': '.', '़': '', 'ँ': 'n',
+}
+
+COMMON_HINDI_WORDS = [
+    ('नमस्ते', 'Namaste'), ('धन्यवाद', 'Dhanyavaad'), ('शुक्रिया', 'Shukriya'),
+    ('हाँ', 'Haan'), ('नहीं', 'Nahin'), ('अलविदा', 'Alvida'), ('सर', 'sir'),
+    ('ठीक', 'theek'), ('है', 'hai'), ('कहो', 'kaho'), ('सुनाओ', 'sunao'),
+    ('सहायता', 'sahayata'), ('मदद', 'madad'), ('करें', 'karein'),
+]
+
+def transliterate_hindi_to_latin(text: str) -> str:
+    """Converts Devanagari Hindi text to Romanized Latin phonetics so English TTS engines can pronounce it."""
+    if not any('\u0900' <= char <= '\u097f' for char in text):
+        return text
+    res = text
+    for word, repl in COMMON_HINDI_WORDS:
+        res = res.replace(word, repl)
+    return "".join(DEVANAGARI_MAP.get(ch, ch) for ch in res)
+
 
 class TTSEngine:
     """Manages text-to-speech synthesis in a dedicated background worker thread using native Windows SAPI."""
@@ -73,6 +104,15 @@ class TTSEngine:
             self._voice.Rate = sapi_rate
 
             voices = self._voice.GetVoices()
+            self._hindi_voice_index = None
+            if voices:
+                for i in range(voices.Count):
+                    desc = voices.Item(i).GetDescription().lower()
+                    if "hindi" in desc or "kalpana" in desc or "hemant" in desc or "ananya" in desc:
+                        self._hindi_voice_index = i
+                        logger.info(f"Detected native Windows Hindi voice: {voices.Item(i).GetDescription()}")
+                        break
+
             if voices and 0 <= self.voice_index < voices.Count:
                 self._voice.Voice = voices.Item(self.voice_index)
                 logger.info(f"TTS voice set to: {voices.Item(self.voice_index).GetDescription()}")
@@ -122,8 +162,32 @@ class TTSEngine:
 
                 try:
                     logger.info(f"Speaking aloud: '{text}'")
+                    # Handle multilingual Devanagari Hindi text
+                    has_devanagari = any('\u0900' <= ch <= '\u097f' for ch in text)
+                    switched_voice = False
+
+                    if has_devanagari:
+                        if self._hindi_voice_index is not None and self._voice:
+                            try:
+                                voices = self._voice.GetVoices()
+                                self._voice.Voice = voices.Item(self._hindi_voice_index)
+                                switched_voice = True
+                            except Exception:
+                                text = transliterate_hindi_to_latin(text)
+                        else:
+                            text = transliterate_hindi_to_latin(text)
+
                     # Synchronous speak on this worker thread
                     self._voice.Speak(text)
+
+                    # Revert to default voice if temporarily switched
+                    if switched_voice and self._voice:
+                        try:
+                            voices = self._voice.GetVoices()
+                            if 0 <= self.voice_index < voices.Count:
+                                self._voice.Voice = voices.Item(self.voice_index)
+                        except Exception:
+                            pass
                 except Exception:
                     logger.exception(f"Error while speaking text: '{text}'")
                 finally:

@@ -24,7 +24,7 @@ class SpeechRecognizer:
     def __init__(
         self,
         device_index: Optional[int] = None,
-        language: str = "en-US",
+        language: Optional[str] = None,
         pause_threshold: float = 0.8,
         on_text: Optional[Callable[[str], None]] = None,
         on_status: Optional[Callable[[str], None]] = None,
@@ -34,14 +34,14 @@ class SpeechRecognizer:
         Initialize the speech recognizer.
 
         :param device_index: Index of audio input device (None uses system default)
-        :param language: Language code for recognition (defaults to en-US)
+        :param language: Language code for recognition (defaults to config.STT_LANGUAGE or 'en-IN')
         :param pause_threshold: Seconds of non-speaking audio before phrase is complete
         :param on_text: Callback triggered when speech is recognized: on_text(text)
         :param on_status: Callback triggered when listener status changes (e.g. LISTENING, TRANSCRIBING)
         :param on_error: Callback triggered on recognition or hardware error
         """
         self.device_index = device_index
-        self.language = language
+        self.language = language or getattr(config, "STT_LANGUAGE", getattr(config, "DEFAULT_LANGUAGE", "en-IN"))
         self.pause_threshold = pause_threshold
 
         self.on_text = on_text
@@ -206,6 +206,11 @@ class SpeechRecognizer:
     def resume(self) -> None:
         """Resumes listening after pause."""
         self._is_paused = False
+
+    def set_language(self, language_code: str) -> None:
+        """Dynamically sets or updates speech recognition language (e.g. 'en-IN', 'hi-IN', 'en-US')."""
+        self.language = language_code
+        logger.info(f"Speech recognition language switched to: {language_code}")
 
     @property
     def is_running(self) -> bool:

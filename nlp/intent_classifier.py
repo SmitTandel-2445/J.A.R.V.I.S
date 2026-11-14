@@ -56,11 +56,16 @@ class IntentClassifier:
     actions in sub-millisecond time before falling back to cloud LLM processing.
     """
 
-    # Prefixes / filler words to strip for cleaner intent matching
+    # Prefixes / filler words to strip for cleaner intent matching (English, Hindi, and Hinglish)
     FILLER_PREFIXES = [
         r"^jarvis\b[,:]?\s*",
         r"^hey\s+jarvis\b[,:]?\s*",
         r"^ok\s+jarvis\b[,:]?\s*",
+        r"^arre\s+jarvis\b[,:]?\s*",
+        r"^suno\s+jarvis\b[,:]?\s*",
+        r"^jarvis\s+(?:bhai|ji|yaar)\b[,:]?\s*",
+        r"^kripya\b\s*",
+        r"^zara\b\s*",
         r"^please\b\s*",
         r"^could\s+you\s+(?:please\s+)?",
         r"^can\s+you\s+(?:please\s+)?",
@@ -75,6 +80,8 @@ class IntentClassifier:
         r"minimize\b", r"minimise\b", r"maximize\b", r"maximise\b", r"restore\b",
         r"snap\b", r"switch\b", r"show\s+desktop\b",
         r"set\s+volume\b", r"volume\b", r"mute\b", r"unmute\b",
+        r"kholo\b", r"chalu\s+karo\b", r"band\s+karo\b", r"shuru\s+karo\b",
+        r"awaaz\b", r"gaana\b", r"samay\b", r"tarikh\b", r"batao\b",
         r"set\s+brightness\b", r"brightness\b",
         r"take\s+(?:a\s+)?screenshot\b", r"capture\s+(?:the\s+)?screen\b", r"screenshot\b",
         r"create\s+(?:a\s+)?(?:new\s+)?folder\b", r"empty\s+(?:the\s+)?recycle\s+bin\b",
@@ -118,47 +125,50 @@ class IntentClassifier:
             re.IGNORECASE,
         )
 
-        # App Launching: "open chrome", "launch notepad", "start spotify"
+        # App Launching: "open chrome", "launch notepad", "start spotify", "chrome kholo", "notepad chalu karo"
         self._open_app_regex = re.compile(
-            r"^(?:open|launch|start|run)\s+(?:the\s+)?(?P<app_name>.+)$",
+            r"^(?:(?:open|launch|start|run|chalu\s+karo|shuru\s+karo)\s+(?:the\s+)?(?P<app_name>.+)|"
+            r"(?P<app_name_hi>.+?)\s+(?:kholo|chalu\s+karo|start\s+karo|open\s+karo|chalao))$",
             re.IGNORECASE,
         )
 
-        # App Closing: "close chrome", "exit notepad", "kill discord", "quit spotify"
+        # App Closing: "close chrome", "exit notepad", "kill discord", "quit spotify", "chrome band karo"
         self._close_app_regex = re.compile(
-            r"^(?:close|exit|terminate|kill|quit)\s+(?:the\s+)?(?P<app_name>.+)$",
+            r"^(?:(?:close|exit|terminate|kill|quit|band\s+karo)\s+(?:the\s+)?(?P<app_name>.+)|"
+            r"(?P<app_name_hi>.+?)\s+(?:band\s+karo|close\s+karo|hatao|kill\s+karo))$",
             re.IGNORECASE,
         )
 
-        # Volume Controls: "volume up", "increase volume", "mute", "unmute", "set volume to 50"
+        # Volume Controls: "volume up", "increase volume", "mute", "unmute", "set volume to 50", "awaaz badhao"
         self._volume_set_regex = re.compile(
-            r"^(?:set\s+volume\s+(?:to\s+)?|volume\s+(?:to\s+)?)(?P<level>\d{1,3})(?:\s*%)?$",
+            r"^(?:(?:set\s+volume\s+(?:to\s+)?|volume\s+(?:to\s+)?)(?P<level>\d{1,3})(?:\s*%)?|"
+            r"(?:volume|awaaz)\s+(?P<level_hi>\d{1,3})\s+(?:karo|pe\s+karo|percent\s+karo))$",
             re.IGNORECASE,
         )
         self._volume_up_regex = re.compile(
-            r"^(?:volume\s+up|increase\s+volume|turn\s+up\s+the\s+volume|louder)$",
+            r"^(?:volume\s+up|increase\s+volume|turn\s+up\s+the\s+volume|louder|awaaz\s+badhao|volume\s+badhao|sound\s+badhao|awaaz\s+badao|awaaz\s+tez\s+karo|awaaz\s+tej\s+karo)$",
             re.IGNORECASE,
         )
         self._volume_down_regex = re.compile(
-            r"^(?:volume\s+down|decrease\s+volume|lower\s+volume|turn\s+down\s+the\s+volume|softer)$",
+            r"^(?:volume\s+down|decrease\s+volume|lower\s+volume|turn\s+down\s+the\s+volume|softer|awaaz\s+kam\s+karo|volume\s+kam\s+karo|sound\s+kam\s+karo|awaaz\s+dheemi\s+karo|dheemi\s+karo)$",
             re.IGNORECASE,
         )
         self._volume_mute_regex = re.compile(
-            r"^(?:mute|mute\s+audio|mute\s+sound|silence)$",
+            r"^(?:mute|mute\s+audio|mute\s+sound|silence|awaaz\s+band\s+karo|mute\s+karo|chup\s+ho\s+jao)$",
             re.IGNORECASE,
         )
         self._volume_unmute_regex = re.compile(
-            r"^(?:unmute|unmute\s+audio|unmute\s+sound)$",
+            r"^(?:unmute|unmute\s+audio|unmute\s+sound|unmute\s+karo|awaaz\s+chalu\s+karo)$",
             re.IGNORECASE,
         )
 
-        # Time & Date: "what time is it", "tell me the time", "what is today's date"
+        # Time & Date: "what time is it", "tell me the time", "what is today's date", "time kya hua hai"
         self._time_regex = re.compile(
-            r"^(?:what(?:'s|\s+is)\s+(?:the\s+)?time|what\s+time\s+is\s+it|tell\s+me\s+the\s+time|current\s+time)$",
+            r"^(?:what(?:'s|\s+is)\s+(?:the\s+)?time|what\s+time\s+is\s+it|tell\s+me\s+the\s+time|current\s+time|time\s+kya\s+hua\s+hai|samay\s+kya\s+hua\s+hai|kitne\s+baje\s+hain|time\s+batao|samay\s+batao)$",
             re.IGNORECASE,
         )
         self._date_regex = re.compile(
-            r"^(?:what(?:'s|\s+is)\s+(?:the\s+|today'?s\s+)?date|what\s+date\s+is\s+it|tell\s+me\s+the\s+date|what\s+day\s+is\s+it)$",
+            r"^(?:what(?:'s|\s+is)\s+(?:the\s+|today'?s\s+)?date|what\s+date\s+is\s+it|tell\s+me\s+the\s+date|what\s+day\s+is\s+it|aaj\s+ki\s+date\s+kya\s+hai|aaj\s+konsi\s+tarikh\s+hai|aaj\s+konsa\s+din\s+hai|date\s+batao|tarikh\s+batao)$",
             re.IGNORECASE,
         )
 
@@ -168,13 +178,15 @@ class IntentClassifier:
             re.IGNORECASE,
         )
 
-        # YouTube & Spotify Explicit Plays: "play X on youtube", "play X on spotify", "play song X in spotify"
+        # YouTube & Spotify Explicit Plays: "play X on youtube", "play X on spotify", "youtube par X bajao"
         self._youtube_regex = re.compile(
-            r"^play(?:\s+(?:the\s+)?(?:song|track|music|video))?\s+(?P<query>.+?)\s+(?:on|in)\s+youtube$",
+            r"^(?:play(?:\s+(?:the\s+)?(?:song|track|music|video))?\s+(?P<query>.+?)\s+(?:on|in)\s+youtube|"
+            r"youtube\s+(?:par|pe)\s+(?P<query_hi>.+?)\s+(?:bajao|chalao|play\s+karo))$",
             re.IGNORECASE,
         )
         self._spotify_play_regex = re.compile(
-            r"^play(?:\s+(?:the\s+)?(?:song|track|music))?\s+(?P<query>.+?)\s+(?:on|in)\s+spotify$",
+            r"^(?:play(?:\s+(?:the\s+)?(?:song|track|music))?\s+(?P<query>.+?)\s+(?:on|in)\s+spotify|"
+            r"spotify\s+(?:par|pe)\s+(?P<query_hi>.+?)\s+(?:bajao|chalao|play\s+karo))$",
             re.IGNORECASE,
         )
 
@@ -218,21 +230,33 @@ class IntentClassifier:
             re.IGNORECASE,
         )
 
-        # System Power: "lock screen", "lock workstation", "sleep", "go to sleep"
+        # System Power: "lock screen", "lock workstation", "sleep", "go to sleep", "screen lock karo"
         self._lock_regex = re.compile(
-            r"^(?:lock(?:\s+the)?\s+(?:screen|workstation|pc|computer)|lock\s+down)$",
+            r"^(?:lock(?:\s+the)?\s+(?:screen|workstation|pc|computer)|lock\s+down|screen\s+lock\s+karo|pc\s+lock\s+karo)$",
             re.IGNORECASE,
         )
         self._sleep_regex = re.compile(
-            r"^(?:(?:go\s+to\s+|put\s+(?:the\s+|this\s+)?(?:pc|computer)\s+to\s+)?sleep|enter\s+sleep\s+mode|sleep\s+pc)$",
+            r"^(?:(?:go\s+to\s+|put\s+(?:the\s+|this\s+)?(?:pc|computer)\s+to\s+)?sleep|enter\s+sleep\s+mode|sleep\s+pc|computer\s+ko\s+sleep\s+mode\s+me\s+daalo|pc\s+sleep\s+karo)$",
             re.IGNORECASE,
         )
 
-        # Media Controls: "play music", "pause music", "next track", "previous track"
-        self._media_play_pause_regex = re.compile(r"^(?:(?:play|pause|resume)(?:\s+(?:the\s+)?(?:music|song))?|pause|resume)$", re.IGNORECASE)
-        self._media_next_regex = re.compile(r"^(?:next\s+(?:song|track)|skip\s+(?:song|track)?)$", re.IGNORECASE)
-        self._media_prev_regex = re.compile(r"^(?:previous\s+(?:song|track)|prev\s+(?:song|track))$", re.IGNORECASE)
-        self._media_stop_regex = re.compile(r"^stop\s+(?:the\s+)?(?:music|playback)$", re.IGNORECASE)
+        # Media Controls: "play music", "pause music", "next track", "gaana bajao", "gaana roko"
+        self._media_play_pause_regex = re.compile(
+            r"^(?:(?:play|pause|resume)(?:\s+(?:the\s+)?(?:music|song))?|pause|resume|gaana\s+bajao|music\s+bajao|gaana\s+roko|gaana\s+pause\s+karo)$",
+            re.IGNORECASE,
+        )
+        self._media_next_regex = re.compile(
+            r"^(?:next\s+(?:song|track)|skip\s+(?:song|track)?|agla\s+gaana|next\s+gaana)$",
+            re.IGNORECASE,
+        )
+        self._media_prev_regex = re.compile(
+            r"^(?:previous\s+(?:song|track)|prev\s+(?:song|track)|pichhla\s+gaana|pichla\s+gaana)$",
+            re.IGNORECASE,
+        )
+        self._media_stop_regex = re.compile(
+            r"^(?:stop\s+(?:the\s+)?(?:music|playback)|gaana\s+band\s+karo)$",
+            re.IGNORECASE,
+        )
 
         # Window Controls: "minimize window", "minimize chrome", "maximize window", "maximize vs code", "close window"
         self._win_min_regex = re.compile(
@@ -256,8 +280,11 @@ class IntentClassifier:
         self._win_snap_left_regex = re.compile(r"^(?:snap(?:\s+(?:the\s+)?window)?\s+left|snap\s+left)$", re.IGNORECASE)
         self._win_snap_right_regex = re.compile(r"^(?:snap(?:\s+(?:the\s+)?window)?\s+right|snap\s+right)$", re.IGNORECASE)
 
-        # Screenshot: "take screenshot", "capture screen", "screenshot"
-        self._screenshot_regex = re.compile(r"^(?:take(?:\s+a)?\s+screenshot|capture(?:\s+the)?\s+screen|screenshot)$", re.IGNORECASE)
+        # Screenshot: "take screenshot", "capture screen", "screenshot", "screenshot lo", "screenshot kheencho"
+        self._screenshot_regex = re.compile(
+            r"^(?:take(?:\s+a)?\s+screenshot|capture(?:\s+the)?\s+screen|screenshot|screenshot\s+lo|screenshot\s+kheencho|screen\s+capture\s+karo)$",
+            re.IGNORECASE,
+        )
 
         # File & Folder: "open downloads", "open documents", "create folder [name]", "empty recycle bin"
         self._folder_open_regex = re.compile(
@@ -603,24 +630,26 @@ class IntentClassifier:
                 parameters={"action": "type", "text": type_m.group("text").strip()},
             )
 
-        # 1. Explicit YouTube Play Match ("play X on youtube")
+        # 1. Explicit YouTube Play Match ("play X on youtube", "youtube par X bajao")
         yt_match = self._youtube_regex.match(cleaned)
         if yt_match:
+            yt_query = (yt_match.group("query") or yt_match.group("query_hi") or "").strip()
             return IntentResult(
                 intent=IntentType.YOUTUBE_PLAY,
                 raw_text=text,
                 cleaned_text=cleaned,
-                parameters={"query": yt_match.group("query").strip()},
+                parameters={"query": yt_query},
             )
 
-        # 2. Explicit Spotify Play Match ("play X on spotify")
+        # 2. Explicit Spotify Play Match ("play X on spotify", "spotify par X bajao")
         spot_match = self._spotify_play_regex.match(cleaned)
         if spot_match:
+            spot_query = (spot_match.group("query") or spot_match.group("query_hi") or "").strip()
             return IntentResult(
                 intent=IntentType.SPOTIFY_PLAY,
                 raw_text=text,
                 cleaned_text=cleaned,
-                parameters={"query": spot_match.group("query").strip()},
+                parameters={"query": spot_query},
             )
 
         # 3. Media Toggle Controls ("play music", "pause music", "resume")
@@ -1011,30 +1040,33 @@ class IntentClassifier:
                 parameters={"action": "unmute_mic"},
             )
 
-        # 11. App Launch Match
+        # 11. App Launch Match ("open chrome", "chrome kholo")
         open_match = self._open_app_regex.match(cleaned)
         if open_match:
+            app_name = (open_match.group("app_name") or open_match.group("app_name_hi") or "").strip()
             return IntentResult(
                 intent=IntentType.OPEN_APP,
                 raw_text=text,
                 cleaned_text=cleaned,
-                parameters={"app_name": open_match.group("app_name").strip()},
+                parameters={"app_name": app_name},
             )
 
-        # 4. App Close Match
+        # 4. App Close Match ("close chrome", "chrome band karo")
         close_match = self._close_app_regex.match(cleaned)
         if close_match:
+            app_name = (close_match.group("app_name") or close_match.group("app_name_hi") or "").strip()
             return IntentResult(
                 intent=IntentType.CLOSE_APP,
                 raw_text=text,
                 cleaned_text=cleaned,
-                parameters={"app_name": close_match.group("app_name").strip()},
+                parameters={"app_name": app_name},
             )
 
         # 5. Volume Set / Mute / Up / Down Matches
         vol_set_match = self._volume_set_regex.match(cleaned)
         if vol_set_match:
-            level = int(vol_set_match.group("level"))
+            raw_lvl = vol_set_match.group("level") or vol_set_match.group("level_hi") or "50"
+            level = int(raw_lvl)
             return IntentResult(
                 intent=IntentType.SYSTEM_VOLUME,
                 raw_text=text,

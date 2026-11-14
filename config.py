@@ -60,12 +60,16 @@ TEXT_COLOR = "#FFFFFF"
 BACKGROUND_COLOR = "#0A0A0A"
 
 # =====================================
-# Voice
+# Voice & Language
 # =====================================
 
 WAKE_WORD = "jarvis"
 
-DEFAULT_LANGUAGE = "en"
+# Default Speech-to-Text Language:
+# "en-IN" enables fluent bilingual recognition (English, Indian accents, & Hinglish).
+# Other options: "hi-IN" (Hindi), "en-US" (US English).
+DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE", "en-IN")
+STT_LANGUAGE = os.getenv("STT_LANGUAGE", DEFAULT_LANGUAGE)
 
 VOICE_RATE = 180
 
