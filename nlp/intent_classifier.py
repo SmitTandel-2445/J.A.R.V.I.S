@@ -224,7 +224,7 @@ class IntentClassifier:
             re.IGNORECASE,
         )
         self._sleep_regex = re.compile(
-            r"^(?:(?:go\s+to\s+)?sleep|enter\s+sleep\s+mode|sleep\s+pc)$",
+            r"^(?:(?:go\s+to\s+|put\s+(?:the\s+|this\s+)?(?:pc|computer)\s+to\s+)?sleep|enter\s+sleep\s+mode|sleep\s+pc)$",
             re.IGNORECASE,
         )
 

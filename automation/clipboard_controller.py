@@ -14,7 +14,7 @@ import pyautogui
 import pyperclip
 from utils.logger import logger
 
-pyautogui.FAILSAFE = False
+pyautogui.FAILSAFE = True
 
 
 class ClipboardController:
@@ -33,6 +33,17 @@ class ClipboardController:
                 return True, "Your clipboard is currently empty, sir.", ""
 
             clean_text = raw_text.strip()
+
+            # Security Check: Detect if clipboard contains sensitive credentials/tokens
+            import re
+            is_secret = (
+                re.search(r"\b(?:AIzaSy|sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{20,}|bearer\s+[a-zA-Z0-9\._\-]+)\b", clean_text, re.I)
+                or (len(clean_text) > 24 and " " not in clean_text and re.search(r"[0-9]", clean_text) and re.search(r"[a-z]", clean_text) and re.search(r"[A-Z]", clean_text))
+            )
+            if is_secret:
+                logger.info("Clipboard read contains sensitive credential or secret; suppressed aloud reading.")
+                return True, "Your clipboard appears to contain a security token or credential. For your security, I will not speak it aloud, sir.", clean_text
+
             # If text is very long, summarize for speech synthesis so TTS does not block
             if len(clean_text) > 200:
                 speech = f"Your clipboard contains {len(clean_text)} characters. The beginning reads: {clean_text[:140]}..."

@@ -32,6 +32,7 @@ from system.display_controller import DisplayController, display_controller as d
 from system.network_controller import NetworkController, network_controller as default_network
 from system.power_controller import PowerController, power_controller as default_power
 from system.task_manager import TaskManager, task_manager as default_task_mgr
+from core.security import SecurityManager, security_manager as default_security
 from utils.logger import logger
 
 
@@ -72,12 +73,14 @@ class ActionRouter:
         display_controller: Optional[DisplayController] = None,
         shortcut_controller: Optional[ShortcutController] = None,
         context_manager: Optional[ContextManager] = None,
+        security_manager: Optional[SecurityManager] = None,
     ):
         """
         Initialize the Action Router.
         """
         self.brain = brain or default_brain
         self.classifier = classifier or IntentClassifier()
+        self.security = security_manager or default_security
         self.app_launcher = app_launcher or default_app_launcher
         self.audio_controller = audio_controller or default_audio
         self.browser_controller = browser_controller or default_browser
@@ -154,8 +157,8 @@ class ActionRouter:
         lead = ", ".join([clean_parts[0]] + [p.lower() for p in clean_parts[1:-1]])
         return f"{lead}, and {clean_parts[-1].lower()}, sir."
 
-    def _execute_single_intent(self, intent_result: IntentResult, query_text: str) -> ActionResult:
-        """Executes a single classified intent."""
+    def _execute_raw_intent(self, intent_result: IntentResult, query_text: str) -> ActionResult:
+        """Executes a single classified intent after security evaluation."""
         if intent_result.intent in self._handlers:
             handler = self._handlers[intent_result.intent]
             try:
@@ -178,6 +181,52 @@ class ActionRouter:
             success=True,
         )
 
+    def _execute_single_intent(self, intent_result: IntentResult, query_text: str) -> ActionResult:
+        """Enforces security inspection, input validation, and confirmation gates."""
+        # Security Gate: Evaluate action risk, command validation, and permissions
+        decision = self.security.evaluate(
+            intent_val=intent_result.intent.value,
+            parameters=intent_result.parameters,
+            raw_text=query_text,
+        )
+
+        if not decision.allowed:
+            speech = f"I cannot execute that command, sir. {decision.reason}"
+            return ActionResult(
+                intent=intent_result.intent,
+                spoken_response=speech,
+                log_message=f"JARVIS: [SECURITY BLOCKED] {decision.reason}",
+                success=False,
+                data={"blocked": True, "reason": decision.reason},
+            )
+
+        if decision.requires_confirmation:
+            # Register pending action for explicit user authorization
+            def _confirmed_execution():
+                res = self._execute_raw_intent(intent_result, query_text)
+                return res.success, res.spoken_response
+
+            self.security.confirm_mgr.request_confirmation(
+                intent_val=intent_result.intent.value,
+                parameters=decision.sanitized_params,
+                prompt=decision.confirmation_prompt,
+                handler=_confirmed_execution,
+                risk_level=str(decision.risk_level),
+            )
+            return ActionResult(
+                intent=intent_result.intent,
+                spoken_response=decision.confirmation_prompt,
+                log_message=f"JARVIS: [CONFIRMATION REQUIRED] {decision.confirmation_prompt}",
+                success=True,
+                data={"requires_confirmation": True, "risk_level": str(decision.risk_level)},
+            )
+
+        # Apply any sanitized parameters from the security evaluation
+        if decision.sanitized_params:
+            intent_result.parameters.update(decision.sanitized_params)
+
+        return self._execute_raw_intent(intent_result, query_text)
+
     def route(
         self,
         text: str,
@@ -197,6 +246,20 @@ class ActionRouter:
                 log_message="",
                 success=False,
             )
+
+        # 0. Check if there is an active pending confirmation for a sensitive action
+        if self.security.confirm_mgr.has_pending():
+            handled, ok, speech, data = self.security.handle_user_response(text)
+            if handled:
+                if speech:
+                    self.context_manager.set("last_spoken_response", speech)
+                return ActionResult(
+                    intent=IntentType.CONVERSATION_AI,
+                    spoken_response=speech,
+                    log_message=f"JARVIS: [SECURITY] {speech}",
+                    success=ok,
+                    data=data or {},
+                )
 
         intents = self.classifier.classify_multi(text)
 

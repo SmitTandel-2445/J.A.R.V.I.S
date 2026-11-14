@@ -20,10 +20,18 @@ class ContextManager:
         self._lock = threading.Lock()
 
     def set(self, key: str, value: Any) -> None:
-        """Stores a key-value pair in active session context."""
+        """Stores a key-value pair in active session context, redacting credentials."""
+        # Sanitize credentials from being stored in plain session context
+        clean_key = str(key).lower()
+        if any(sec in clean_key for sec in ("api_key", "password", "token", "secret")):
+            val_str = "***REDACTED***"
+        else:
+            val_str = str(value)
+
         with self._lock:
             self._context[key] = value
-            logger.info(f"Context updated: '{key}' = '{value}'")
+            # Redact in log output
+            logger.info(f"Context updated: '{key}' = '{val_str}'")
 
     def get(self, key: str, default: Any = None) -> Any:
         """Retrieves a value from session context."""

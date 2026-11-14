@@ -325,17 +325,26 @@ class TaskManager:
     def end_process(target_name: str) -> Tuple[bool, str]:
         """
         Forcefully terminates all processes matching target_name.
+        Guarded against terminating protected Windows and J.A.R.V.I.S. processes.
         :param target_name: Name of process or application
         :return: (success: bool, spoken_response: str)
         """
+        from core.security.command_validator import CommandValidator
+
         try:
             clean_target = target_name.strip().lower()
+            is_valid, canon_name, err = CommandValidator.validate_process_target(clean_target)
+            if not is_valid:
+                logger.warning(f"Task manager termination blocked by CommandValidator: {err}")
+                return False, err
+
             terminated_count = 0
+            target_exe = f"{clean_target}.exe" if not clean_target.endswith(".exe") else clean_target
 
             for p in psutil.process_iter(["pid", "name"]):
                 try:
-                    pname = p.info["name"].lower()
-                    if clean_target in pname or pname.startswith(clean_target):
+                    pname = (p.info.get("name") or "").lower()
+                    if pname and (pname == target_exe or pname == clean_target):
                         p.terminate()
                         terminated_count += 1
                 except (psutil.NoSuchProcess, psutil.AccessDenied):

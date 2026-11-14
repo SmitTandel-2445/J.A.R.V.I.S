@@ -67,18 +67,26 @@ class FileManager:
     def create_folder(cls, folder_name: str) -> Tuple[bool, str]:
         """
         Creates a new directory on the user's Desktop.
+        Guarded against path traversal attacks.
 
         :param folder_name: Name of the folder to create
         :return: (success: bool, spoken_response: str)
         """
+        from core.security.file_access_guard import file_access_guard
+
         clean_name = folder_name.strip()
         if not clean_name:
             return False, "Please specify a name for the new folder, sir."
 
+        desktop_dir = Path(os.path.expanduser("~")) / "Desktop"
+        is_valid, canon_path, err = file_access_guard.validate_folder_creation(desktop_dir, clean_name)
+        if not is_valid or not canon_path:
+            logger.warning(f"Folder creation blocked by FileAccessGuard: {err}")
+            return False, f"Folder creation blocked: {err}"
+
         try:
-            desktop_path = Path(os.path.expanduser("~")) / "Desktop" / clean_name
-            desktop_path.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Created new folder on Desktop: {desktop_path}")
+            canon_path.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Created new folder on Desktop: {canon_path}")
             return True, f"Created folder {clean_name} on your Desktop, sir."
         except Exception as e:
             logger.error(f"Failed to create folder '{folder_name}': {e}")
@@ -104,8 +112,11 @@ class FileManager:
     def open_latest_download(cls) -> Tuple[bool, str, Optional[str]]:
         """
         Locates the most recently downloaded file in Downloads and opens it.
+        Guarded against launching dangerous executable or script files.
         :return: (success: bool, spoken_response: str, file_path: Optional[str])
         """
+        from core.security.file_access_guard import file_access_guard
+
         try:
             downloads_dir = Path(os.path.expanduser("~")) / "Downloads"
             if not downloads_dir.exists():
@@ -119,6 +130,13 @@ class FileManager:
                 return True, "Your Downloads folder contains no downloaded files, sir.", None
 
             latest_file = max(files, key=lambda f: f.stat().st_mtime)
+
+            # Security Guard: Verify file is safe to launch
+            is_safe, reason = file_access_guard.validate_file_launch(latest_file)
+            if not is_safe:
+                logger.warning(f"Blocked automatic execution of latest download: {reason}")
+                return False, reason, str(latest_file)
+
             os.startfile(str(latest_file))
             logger.info(f"Opened latest downloaded file: {latest_file.name}")
             return True, f"Opening your latest download, {latest_file.name}, sir.", str(latest_file)

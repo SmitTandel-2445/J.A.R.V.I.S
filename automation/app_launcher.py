@@ -87,15 +87,7 @@ class AppLauncher:
                 except Exception:
                     pass
 
-        # 4. Direct Windows Shell Start Fallback
-        try:
-            os.startfile(clean_name)
-            return True, f"Opening {clean_name}, sir."
-        except Exception:
-            pass
-
-        # 5. Smart Fallback: If not found on PC, search Google for it automatically!
-        # (Just like JARVIS 2.0 did)
+        # 4. Safe Web Search Fallback: If not found on PC, search Google for it automatically
         search_url = f"https://www.google.com/search?q={urllib.parse.quote_plus(clean_name)}"
         try:
             webbrowser.open(search_url)
@@ -107,12 +99,20 @@ class AppLauncher:
 
     def close(self, app_name: str) -> Tuple[bool, str]:
         """
-        Terminates running instances of an application.
+        Terminates running instances of an application safely.
+        Enforces exact process name matching and protects Windows critical processes.
 
         :param app_name: Spoken or text name of the application.
         :return: (success: bool, status_message: str)
         """
+        from core.security.command_validator import CommandValidator
+
         clean_name = app_name.strip().lower()
+        is_valid, canon_name, err = CommandValidator.validate_process_target(clean_name)
+        if not is_valid:
+            logger.warning(f"Process termination blocked by CommandValidator: {err}")
+            return False, err
+
         target, _ = self.scanner.resolve(clean_name)
 
         # Extract target process base name
@@ -125,11 +125,9 @@ class AppLauncher:
         try:
             for proc in psutil.process_iter(["name", "pid"]):
                 try:
-                    proc_name = proc.info.get("name")
-                    if proc_name and (
-                        proc_name.lower() == target_exe
-                        or clean_name in proc_name.lower()
-                    ):
+                    proc_name = (proc.info.get("name") or "").lower()
+                    # Enforce exact match on executable name to prevent broad substring kills
+                    if proc_name and (proc_name == target_exe or proc_name == f"{clean_name}.exe" or proc_name == clean_name):
                         proc.terminate()
                         killed_count += 1
                 except (psutil.NoSuchProcess, psutil.AccessDenied):

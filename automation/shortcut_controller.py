@@ -18,7 +18,7 @@ import pyautogui
 
 from utils.logger import logger
 
-pyautogui.FAILSAFE = False
+pyautogui.FAILSAFE = True
 
 
 class ShortcutController:
